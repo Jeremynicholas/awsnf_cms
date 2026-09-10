@@ -13,7 +13,7 @@ export default defineConfig({
         changeOrigin: true,
 
         rewrite: (path) =>
-          `/YOUR_FIREBASE_PROJECT_ID/australia-southeast1/api${path.replace(/^\/api/, '')}`,
+          `/awsnfs-nuxt/australia-southeast1/api${path.replace(/^\/api/, '')}`,
       },
     },
   },

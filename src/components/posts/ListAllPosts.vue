@@ -1,3 +1,4 @@
+<!--components/posts/ListAllPosts.vue-->
 <template>
   <nav class="sorting grid-row" role="row">
     <span class="cell"
@@ -33,6 +34,18 @@
       <div class="arrows" aria-hidden="true">
         <i class="fas fa-caret-up" :class="{ asc: sortBy === 'countryNames_asc' }"></i>
         <i class="fas fa-caret-down" :class="{ desc: sortBy === 'countryNames_desc' }"></i>
+      </div>
+    </span>
+
+    <span class="cell"
+      :class="{ active: sortBy.startsWith('holidayTypes') }"
+      @click="changeSort('holidayTypes')"
+      type="button"
+    >
+      Type
+      <div class="arrows" aria-hidden="true">
+        <i class="fas fa-caret-up" :class="{ asc: sortBy === 'holidayTypes_asc' }"></i>
+        <i class="fas fa-caret-down" :class="{ desc: sortBy === 'holidayTypes_desc' }"></i>
       </div>
     </span>
 
@@ -99,11 +112,15 @@
         </div>
 
         <div class="cell">
-          <strong>{{ post.regionNames.join('') }}</strong>
+          <strong>{{ (post.regionNames || []).join('') }}</strong>
         </div>
 
         <div class="cell">
-          <span>{{ post.countryNames.join(', ') }}</span>
+          <span>{{ (post.countryNames || []).join(', ') }}</span>
+        </div>
+
+        <div class="cell">
+          <span>{{ (post.holidayTypes || []).join(', ') }}</span>
         </div>
 
         <div class="cell">
@@ -140,7 +157,6 @@
   import { useLookupStore } from '../../store/lookups'
 
   import EditPostsModal from '../modals/EditPostsModal.vue';
-  import CountrySelector from '../modals/selectors/CountrySelector.vue';
 
   const props = defineProps({
     postType: String,
@@ -154,7 +170,8 @@
 
   const route = useRoute();
 
-  const sortBy = ref('') // e.g. 'name_asc'
+  const selectedHolidayTypes = ref('')
+  const sortBy = ref('')
   const activeModal = ref(null)
   const editPost = reactive({ id: '', name: '', countries: [] })
   const successMessage = ref('')
@@ -201,29 +218,86 @@ watch(
     sortBy.value = `${field}_${newDir}`
   }
 
-// Computed: sorted posts
-  const sortedPosts = computed(() => {
+
   const filterKey = computed(() => {
   const keys = []
+
     if (props.isSpecial) keys.push('specialOffer')
     if (props.isGroupTour) keys.push('groupTour')
+
     return keys.sort().join('_') || 'all'
   })
 
-  const cacheKey = computed(() => `${props.postType}_${filterKey.value}`)
-  const all = computed(() => posts.posts[cacheKey.value] || [])
+  const cacheKey = computed(() => {
+    return `${props.postType}_${filterKey.value}`
+  })
 
-  if (!sortBy.value) return all.value
+  const allPosts = computed(() => {
+    return posts.posts[cacheKey.value] || []
+  })
+
+
+  const holidayTypesOptions = computed(() => {
+  const types = allPosts.value.flatMap(post =>
+    Array.isArray(post.holidayTypes)
+      ? post.holidayTypes
+      : []
+  )
+
+  return [...new Set(types)]
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+})
+
+// Computed: sorted posts
+const sortedPosts = computed(() => {
+  let result = allPosts.value
+
+  // Filter by trip type
+  if (selectedHolidayTypes.value) {
+    result = result.filter(post =>
+      Array.isArray(post.holidayTypes) &&
+      post.holidayTypes.includes(selectedHolidayTypes.value)
+    )
+  }
+
+  // No sorting selected
+  if (!sortBy.value) {
+    return result
+  }
 
   const [field, dir] = sortBy.value.split('_')
   const modifier = dir === 'asc' ? 1 : -1
 
-  return [...all.value].sort((a, b) => {
-    const aVal = typeof a[field] === 'string' ? a[field].toLowerCase() : a[field]
-    const bVal = typeof b[field] === 'string' ? b[field].toLowerCase() : b[field]
+  return [...result].sort((a, b) => {
+    let aVal = a[field]
+    let bVal = b[field]
+
+    // Region, country and trip type are arrays
+    if (Array.isArray(aVal)) {
+      aVal = aVal.join(', ').toLowerCase()
+    } else if (typeof aVal === 'string') {
+      aVal = aVal.toLowerCase()
+    }
+
+    if (Array.isArray(bVal)) {
+      bVal = bVal.join(', ').toLowerCase()
+    } else if (typeof bVal === 'string') {
+      bVal = bVal.toLowerCase()
+    }
+
+    // Allows boolean columns to sort sensibly
+    if (typeof aVal === 'boolean') aVal = aVal ? 1 : 0
+    if (typeof bVal === 'boolean') bVal = bVal ? 1 : 0
+
+    aVal ??= ''
+    bVal ??= ''
 
     if (aVal === bVal) return 0
-    return aVal > bVal ? modifier : -modifier
+
+    return aVal > bVal
+      ? modifier
+      : -modifier
   })
 })
 
@@ -275,6 +349,7 @@ const deletePost = async (post) => {
       minmax(300px, 460px)
       minmax(100px, 200px)
       minmax(200px, 1fr)
+      minmax(40px, 145px)
       minmax(40px, 145px)
       minmax(40px, 145px)
       minmax(150px, 200px)
